@@ -1,1 +1,39 @@
 Zde bude dokumentace...
+
+
+
+Datové zabezpečení naší práce:
+
+___Proměnlivost předpokládané vytíženosti___
+
+Rozdělení požadavků: Typické webové aplikace mohou mít průměrné zatížení mezi 20 % a 60 % CPU během běžného provozu,
+s krátkodobými špičkami až 90 % CPU při neočekávaných událostech
+RESEARCHGATE : https://www.researchgate.net/publication/366562529_A_Cloud-Based_Container_Microservices_A_Review_on_Load-Balancing_and_Auto-Scaling_Issues
+.
+
+___Směrodatná odchylka oproti předpokladu___
+
+Odhady v simulaci: Model prediktivního škálování může zahrnovat rozdíl mezi předpokládaným a skutečným zatížením.
+Směrodatná odchylka u odhadovaného zatížení (např. pro metriky CPU) se typicky pohybuje mezi 5 % až 25 %, v závislosti na kvalitě dat a složitosti modelu
+AKAMAI : https://www.linode.com/docs/guides/load-balancing-fundamentals/
+.
+
+___Vnitřní režie zpřístupnění kontejneru___
+
+Čas inicializace: Vytvoření a zpřístupnění nového kontejneru na běžné platformě, jako je Kubernetes, trvá mezi 5 až 15 sekundami v ideálním případě.
+Při zatížení systému se tento čas může zvýšit až na 30 sekund.
+RESEARCHGATE : https://www.researchgate.net/publication/366562529_A_Cloud-Based_Container_Microservices_A_Review_on_Load-Balancing_and_Auto-Scaling_Issues
+TECHNOLOGY FOCUSED HUB : https://network-insight.net/2015/02/26/load-balancing-and-scale-out-architectures/
+.
+
+___Algoritmy LoadBalancer a Autoscaler___
+
+Latence přesměrování: Dynamické algoritmy LoadBalanceru, jako Weighted Round Robin, mají přidanou latenci přesměrování obvykle <10 ms na požadavek.
+Tato hodnota se může zvýšit při přetížení na 30-50 ms
+AKAMAI : https://www.linode.com/docs/guides/load-balancing-fundamentals/
+.
+
+Doba odezvy na škálování: Reaktivní autoscalery reagují obvykle v časech 1-5 minut,
+což zahrnuje čas na detekci potřeby škálování a spuštění nových instancí
+TECHNOLOGY FOCUSED HUB : https://network-insight.net/2015/02/26/load-balancing-and-scale-out-architectures/
+.
