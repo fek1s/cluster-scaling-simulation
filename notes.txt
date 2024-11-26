@@ -1,0 +1,57 @@
+
+___Projekt IMS___
+
+Téma: Reaktivní vs Prediktivní škálování
+
+---------------------------------------------------------------------------------------------------------------------------------
+Smysl simulace:
+---------------------------------------------------------------------------------------------------------------------------------
+
++ Firmy mohou porovnat reaktivní a prediktivní škálování pro daný typ služby
++ Stanovení obecných závěrů k problematice
+
+---------------------------------------------------------------------------------------------------------------------------------
+Hlavní části:
+---------------------------------------------------------------------------------------------------------------------------------
+
++ Různé metriky pro přidání/odebrání kontejneru (podmínky pro reaktivní škálování)
+  - monitorování zatížení (%CPU, RAM)
+  - Metriky:  - vytížení
+              - doba odezvy na požadavky
+              - (SLA = Service Level Agreement ~ např. 95% požadavků musí být obslouženo do 200 ms)
+
++ Prediktivní model
+  - simulace vytíženosti - model (historická data, datový výzkum)
+
++ Reálný základ
+  - reálná vytíženost (odchylka od modelu vytíženosti)
+  - režie zpřístupnění kontejneru
+
++ LoadBalancer a Autoscaler
+  - existující algoritmy, nevytváříme
+
+---------------------------------------------------------------------------------------------------------------------------------
+Rozhraní simulace:
+---------------------------------------------------------------------------------------------------------------------------------
+
++ Vstupy
+  - Směrodatná odchylka pro normální rozdělení rozdílu reálného a předpokládaného modelu vytíženosti pro daný časový interval
+  - Režie zpřístupnění kontejneru
+
++ Vnitřní nastavení
+  - Proměnlivý model vytíženosti
+  - Model předpokládané vytíženosti pro prediktivní škálování
+  - Pravidla pro reaktivní škálování
+
++ Výstupy
+  - Cena (resources na požadavek)
+  - Porovnání modelů (dostupnost služby, náklady)
+
+---------------------------------------------------------------------------------------------------------------------------------
+Research dat
+---------------------------------------------------------------------------------------------------------------------------------
+
++ Proměnlivost předpokládané vytíženosti
++ Směrodatná odchylka oproti předpokladu 
++ Vnitřní režie zpřístupnění kontejneru
++ Algoritmy LoadBalancer a Autoscaler
