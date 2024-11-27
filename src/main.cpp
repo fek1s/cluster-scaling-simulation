@@ -7,10 +7,12 @@
 #include "simlib.h"
 
 // PARAMETERS
+const int MAX_CONTAINERS = 10; // maximum number of containers
 
 // GLOBAL VARIABLES
 Stat response_time_stat("Response time");
 Histogram response_time_hist("Response time histogram", 0, 0.05, 20);
+Container* containers[MAX_CONTAINERS]; // array of containers
 
 
 // CONTAINER CLASS
@@ -29,12 +31,12 @@ public:
         this->load_stat = new Stat();
     }
     
-    void AddRequest(double load) {
+    void AddRequest() {
         active_requests++;
         UpdateLoad();
     }
 
-    void RemoveRequest(double load) {
+    void RemoveRequest() {
         active_requests--;
         UpdateLoad();
     }
