@@ -16,10 +16,10 @@ Histogram response_time_hist("Response time histogram", 0, 0.05, 20);
 // CONTAINER CLASS
 class Container {
 public: 
-    int id;  // container id
-    int active_requests; // number of active requests
-    double load;      // current load
-    Stat* load_stat;  // load statistics
+    int id;                 // container id
+    int active_requests;    // number of active requests
+    double load;            // current load
+    Stat* load_stat;        // load statistics
 
     // constructor
     Container(int id) {
@@ -42,6 +42,22 @@ public:
     void UpdateLoad(){
         load = active_requests;
         (*load_stat)(load);
+    }
+};
+
+// REQUEST CLASS
+class Request : public Process {
+public:
+    int id;                 // request id
+
+};
+
+
+// REQUEST GENERATOR
+class RequestGenerator : public Event {
+    void Behavior() {
+        //(new Request)->Activate();
+        Activate(Time + Exponential(1)); // TODO 
     }
 };
 
