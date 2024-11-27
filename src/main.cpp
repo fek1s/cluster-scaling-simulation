@@ -6,51 +6,44 @@
 
 #include "simlib.h"
 
-const unsigned MaxBang = 10;    // total number of take-offs
+// PARAMETERS
 
-// model description:
-Constant g(9.81);               // gravity acceleration
+// GLOBAL VARIABLES
+Stat response_time_stat("Response time");
+Histogram response_time_hist("Response time histogram", 0, 0.05, 20);
 
-struct Ball {                   // ball model
-    unsigned count;             // number of take-offs
-    class LimitY: public ConditionDown { // state-event detector
-        Ball *b;
-        void Action() {         // state-event action 
-            b->Bang();
-        } 
-      public:
-        LimitY(Ball * ball): 
-            ConditionDown(ball->y), // condition (y>=0) change TRUE-->FALSE
-            b(ball) { }
-    };
-    LimitY ylim;                // detector object
-    Integrator v, y;            // ball status
 
-    Ball(double initialposition): 
-        count(0), 
-        ylim(this),             // detector
-        v(-g - v * 0.1),        // physics
-        y(v, initialposition) { }
+// CONTAINER CLASS
+class Container {
+public: 
+    int id;  // container id
+    int active_requests; // number of active requests
+    double load;      // current load
+    Stat* load_stat;  // load statistics
 
-    void Bang() {               // state event code - take-off
-        Out();                  // output od status before
-        Print("\n# Bounce#%u\n", ++count);
-        v = -0.9 * v.Value();   // loss of energy
-        y = 0;                  // this is important for accurate simulation
-        if (count >= MaxBang)
-            Stop();             // end of simulation run
-        else
-            Out();              // output od status after
+    // constructor
+    Container(int id) {
+        this->id = id;
+        this->active_requests = 0;
+        this->load = 0.0;
+        this->load_stat = new Stat();
     }
-    void Out() {
-        Print("%f %9.4g %9.4f\n", T.Value(), y.Value(), v.Value());
+    
+    void AddRequest(double load) {
+        active_requests++;
+        UpdateLoad();
+    }
+
+    void RemoveRequest(double load) {
+        active_requests--;
+        UpdateLoad();
+    }
+
+    void UpdateLoad(){
+        load = active_requests;
+        (*load_stat)(load);
     }
 };
-
-Ball b1(10);                    // ball object
-
-void Sample() { b1.Out(); }     // periodic status sampling
-Sampler S(Sample, 0.05);
 
 int main() {                    // experiment control
     // DebugON();
