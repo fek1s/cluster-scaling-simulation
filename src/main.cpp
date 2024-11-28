@@ -386,17 +386,23 @@ void RemoveContainer() {
 
 
 /* AUTOSCALERY */
+/* AUTOSCALERY */
 class PredictiveAutoscaler : public Event {
     void Behavior() {
         int next_interval = ((int)(Time / 60) + 1) % 1440;
         int predicted_requests = predicted_load[next_interval];
 
         // Počet požadavků za SCALING_INTERVAL
-        double requests_in_interval = predicted_requests * (SCALING_INTERVAL / 60.0);
+        int intervals_in_scaling = SCALING_INTERVAL / 60; // Počet minut ve SCALING_INTERVAL
+        int total_predicted_requests = 0;
+        for (int i = 0; i < intervals_in_scaling; ++i) {
+            int idx = (next_interval + i) % 1440;
+            total_predicted_requests += predicted_load[idx];
+        }
 
         // Odhadnutý počet potřebných kontejnerů
         const double DESIRED_LOAD = 38.0; // Nastavte požadovanou průměrnou zátěž
-        int required_containers = ceil((requests_in_interval * SERVICE_TIME) / (SCALING_INTERVAL * DESIRED_LOAD));
+        int required_containers = ceil((total_predicted_requests * SERVICE_TIME) / (SCALING_INTERVAL * DESIRED_LOAD));
 
         // Zajištění minimálního a maximálního počtu kontejnerů
         required_containers = max(required_containers, MIN_CONTAINERS);
