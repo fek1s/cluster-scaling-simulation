@@ -11,11 +11,11 @@ const double SIMULATION_TIME = 24 * 3600; // Simulujeme 24 hodin (v sekundách)
 const double SERVICE_TIME = 0.1;          // Základní čas zpracování jednoho požadavku (v sekundách)
 const int MAX_CONTAINERS = 40;
 const int MIN_CONTAINERS = 1;
-const double SCALING_INTERVAL = 60;      // Interval kontroly pro škálování (v sekundách)
+const double SCALING_INTERVAL = 120;      // Interval kontroly pro škálování (v sekundách)
 const double SLA_RESPONSE_TIME = 0.2;     // SLA: 95% požadavků musí být obslouženo do 200 ms
 const double COST_PER_CONTAINER = 0.1;    // Náklady na jeden kontejner za hodinu
 const double ALPHA = 0.02;                // Koeficient ovlivňující nárůst latence
-const double SCALE_UP_LOAD = 20;           // Prahová hodnota pro škálování nahoru (průměrná zátěž)
+const double SCALE_UP_LOAD = 38;           // Prahová hodnota pro škálování nahoru (průměrná zátěž)
 const double SCALE_DOWN_LOAD = 10;         // Prahová hodnota pro škálování dolů (průměrná zátěž)
 const double CONTAINER_STARTUP_TIME = 0; // Doba spuštění kontejneru v sekundách
 const int REQUESTS_MULTIPLIER = 25;        // Násobitel počtu požadavků
@@ -321,9 +321,9 @@ double GetInterarrivalTime() {
 void GeneratePredictedLoad() {
     // Posuneme predikci o jednu minutu dopředu
     for (int i = 0; i < 1439; i++) {
-        predicted_load[i] = requests_per_minute[i + 1];
+        predicted_load[i] =  REQUESTS_MULTIPLIER * requests_per_minute[i + 1];
     }
-    predicted_load[1439] = requests_per_minute[0]; // Poslední interval
+    predicted_load[1439] = REQUESTS_MULTIPLIER * requests_per_minute[0]; // Poslední interval
 }
 
 
@@ -392,23 +392,18 @@ class PredictiveAutoscaler : public Event {
         int predicted_requests = predicted_load[next_interval];
 
         // Počet požadavků za SCALING_INTERVAL
-        int intervals_in_scaling = SCALING_INTERVAL / 60; // Počet minut ve SCALING_INTERVAL
-        int total_predicted_requests = 0;
-        for (int i = 0; i < intervals_in_scaling; ++i) {
-            int idx = (next_interval + i) % 1440;
-            total_predicted_requests += predicted_load[idx];
-        }
+        double requests_in_interval = predicted_requests * (SCALING_INTERVAL / 60.0);
 
         // Odhadnutý počet potřebných kontejnerů
         const double DESIRED_LOAD = 38.0; // Nastavte požadovanou průměrnou zátěž
-        int required_containers = ceil((total_predicted_requests * SERVICE_TIME) / (SCALING_INTERVAL * DESIRED_LOAD));
+        int required_containers = ceil((requests_in_interval * SERVICE_TIME) / (SCALING_INTERVAL * DESIRED_LOAD));
 
         // Zajištění minimálního a maximálního počtu kontejnerů
         required_containers = max(required_containers, MIN_CONTAINERS);
         required_containers = min(required_containers, MAX_CONTAINERS);
 
         // Implementace hystereze
-        const int SCALE_UP_THRESHOLD = 2;
+        const int SCALE_UP_THRESHOLD = 1;
         const int SCALE_DOWN_THRESHOLD = 1;
 
         if (required_containers > total_containers + SCALE_UP_THRESHOLD) {
@@ -428,6 +423,7 @@ class PredictiveAutoscaler : public Event {
         Activate(Time + SCALING_INTERVAL);
     }
 };
+
 
 class ReactiveAutoscaler : public Event {
 public:
