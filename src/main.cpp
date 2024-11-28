@@ -15,8 +15,8 @@ const double SCALING_INTERVAL = 300;      // Interval kontroly pro škálování
 const double SLA_RESPONSE_TIME = 0.2;     // SLA: 95% požadavků musí být obslouženo do 200 ms
 const double COST_PER_CONTAINER = 0.1;    // Náklady na jeden kontejner za hodinu
 const double ALPHA = 0.02;                // Koeficient ovlivňující nárůst latence
-const double SCALE_UP_LOAD = 8;          // Prahová hodnota pro škálování nahoru (průměrná zátěž)
-const double SCALE_DOWN_LOAD = 4;         // Prahová hodnota pro škálování dolů (průměrná zátěž)
+const double SCALE_UP_LOAD = 9;          // Prahová hodnota pro škálování nahoru (průměrná zátěž)
+const double SCALE_DOWN_LOAD = 5;         // Prahová hodnota pro škálování dolů (průměrná zátěž)
 
 /* GLOBÁLNÍ PROMĚNNÉ */
 int total_containers = 0;
@@ -29,12 +29,12 @@ double operating_cost = 0.0;
 int requests_per_interval[48] = {
     // Hodnoty intenzity požadavků pro každou půlhodinu
     // Například:
-    2 * 25000, 2 * 22500, 2 * 20000, 2 * 17500, 2 * 15000, 2 * 15000, 2 * 17500, 2 * 20000,
-    2 * 25000, 2 * 30000, 2 * 40000, 2 * 50000, 2 * 75000, 2 * 100000, 2 * 125000, 2 * 150000,
-    2 * 175000, 2 * 200000, 2 * 225000, 2 * 235000, 2 * 225000, 2 * 200000, 2 * 175000, 2 * 150000,
-    2 * 125000, 2 * 100000, 2 * 75000, 2 * 60000, 2 * 50000, 2 * 40000, 2 * 30000, 2 * 25000,
-    2 * 22500, 2 * 20000, 2 * 17500, 2 * 15000, 2 * 15000, 2 * 17500, 2 * 20000, 2 * 25000,
-    2 * 30000, 2 * 40000, 2 * 50000, 2 * 60000, 2 * 75000, 2 * 90000, 2 * 100000, 2 * 110000
+    10 * 25000, 10 * 22500, 10 * 20000, 10 * 17500, 10 * 15000, 10 * 15000, 10 * 17500, 10 * 20000,
+    10 * 25000, 10 * 30000, 10 * 40000, 10 * 50000, 10 * 75000, 10 * 100000, 10 * 125000, 10 * 150000,
+    10 * 175000, 10 * 200000, 10 * 225000, 10 * 235000, 10 * 225000, 10 * 200000, 10 * 175000, 10 * 150000,
+    10 * 125000, 10 * 100000, 10 * 75000, 10 * 60000, 10 * 50000, 10 * 40000, 10 * 30000, 10 * 25000,
+    10 * 22500, 10 * 20000, 10 * 17500, 10 * 15000, 10 * 15000, 10 * 17500, 10 * 20000, 10 * 25000,
+    10 * 30000, 10 * 40000, 10 * 50000, 10 * 60000, 10 * 75000, 10 * 90000, 10 * 100000, 10 * 110000
 };
 
 /* PŘEDIKTIVNÍ ŠKÁLOVÁNÍ */
@@ -233,20 +233,29 @@ class PredictiveAutoscaler : public Event {
         int predicted_requests = predicted_load[next_interval];
 
         // Počet požadavků za SCALING_INTERVAL
-        int requests_in_interval = predicted_requests * (SCALING_INTERVAL / 1800.0);
+        double requests_in_interval = predicted_requests * (SCALING_INTERVAL / 1800.0);
 
-        // Odhadnutá zátěž na kontejner
-        double safety_factor = 0.2; // 20% rezervy
-        int required_containers = ceil((requests_in_interval * SERVICE_TIME * safety_factor) / SCALING_INTERVAL);
+        // Odhadnutý počet potřebných kontejnerů
+        const double DESIRED_LOAD = 6.5; // Nastavte požadovanou průměrnou zátěž
+        int required_containers = ceil((requests_in_interval * SERVICE_TIME) / (SCALING_INTERVAL * DESIRED_LOAD));
 
+        // Zajištění minimálního a maximálního počtu kontejnerů
+        required_containers = max(required_containers, MIN_CONTAINERS);
+        required_containers = min(required_containers, MAX_CONTAINERS);
 
-        if (required_containers > total_containers && total_containers < MAX_CONTAINERS) {
-            while (total_containers < required_containers && total_containers < MAX_CONTAINERS) {
+        // Implementace hystereze
+        const int SCALE_UP_THRESHOLD = 4;
+        const int SCALE_DOWN_THRESHOLD = 2;
+
+        if (required_containers > total_containers + SCALE_UP_THRESHOLD) {
+            int containers_to_add = min(required_containers - total_containers, MAX_CONTAINERS - total_containers);
+            for (int i = 0; i < containers_to_add; ++i) {
                 AddContainer();
             }
             cout << "Prediktivní škálování nahoru na " << total_containers << " kontejnerů v čase " << Time << endl;
-        } else if (required_containers < total_containers && total_containers > MIN_CONTAINERS) {
-            while (total_containers > required_containers && total_containers > MIN_CONTAINERS) {
+        } else if (required_containers < total_containers - SCALE_DOWN_THRESHOLD) {
+            int containers_to_remove = min(total_containers - required_containers, total_containers - MIN_CONTAINERS);
+            for (int i = 0; i < containers_to_remove; ++i) {
                 RemoveContainer();
             }
             cout << "Prediktivní škálování dolů na " << total_containers << " kontejnerů v čase " << Time << endl;
