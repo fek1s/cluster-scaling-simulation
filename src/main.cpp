@@ -9,14 +9,15 @@ using namespace std;
 /* PARAMETRY SIMULACE */
 const double SIMULATION_TIME = 24 * 3600; // Simulujeme 24 hodin (v sekundách)
 const double SERVICE_TIME = 0.1;          // Základní čas zpracování jednoho požadavku (v sekundách)
-const int MAX_CONTAINERS = 50;
+const int MAX_CONTAINERS = 40;
 const int MIN_CONTAINERS = 1;
-const double SCALING_INTERVAL = 300;      // Interval kontroly pro škálování (v sekundách)
+const double SCALING_INTERVAL = 100;      // Interval kontroly pro škálování (v sekundách)
 const double SLA_RESPONSE_TIME = 0.2;     // SLA: 95% požadavků musí být obslouženo do 200 ms
 const double COST_PER_CONTAINER = 0.1;    // Náklady na jeden kontejner za hodinu
 const double ALPHA = 0.02;                // Koeficient ovlivňující nárůst latence
-const double SCALE_UP_LOAD = 9;          // Prahová hodnota pro škálování nahoru (průměrná zátěž)
-const double SCALE_DOWN_LOAD = 5;         // Prahová hodnota pro škálování dolů (průměrná zátěž)
+const double SCALE_UP_LOAD = 38;           // Prahová hodnota pro škálování nahoru (průměrná zátěž)
+const double SCALE_DOWN_LOAD = 25;         // Prahová hodnota pro škálování dolů (průměrná zátěž)
+const double CONTAINER_STARTUP_TIME = 0; // Doba spuštění kontejneru v sekundách
 
 /* GLOBÁLNÍ PROMĚNNÉ */
 int total_containers = 0;
@@ -28,13 +29,12 @@ double operating_cost = 0.0;
 /* DATASET ZÁTĚŽE */
 int requests_per_interval[48] = {
     // Hodnoty intenzity požadavků pro každou půlhodinu
-    // Například:
-    10 * 25000, 10 * 22500, 10 * 20000, 10 * 17500, 10 * 15000, 10 * 15000, 10 * 17500, 10 * 20000,
-    10 * 25000, 10 * 30000, 10 * 40000, 10 * 50000, 10 * 75000, 10 * 100000, 10 * 125000, 10 * 150000,
-    10 * 175000, 10 * 200000, 10 * 225000, 10 * 235000, 10 * 225000, 10 * 200000, 10 * 175000, 10 * 150000,
-    10 * 125000, 10 * 100000, 10 * 75000, 10 * 60000, 10 * 50000, 10 * 40000, 10 * 30000, 10 * 25000,
-    10 * 22500, 10 * 20000, 10 * 17500, 10 * 15000, 10 * 15000, 10 * 17500, 10 * 20000, 10 * 25000,
-    10 * 30000, 10 * 40000, 10 * 50000, 10 * 60000, 10 * 75000, 10 * 90000, 10 * 100000, 10 * 110000
+    20 * 25000, 20 * 22500, 20 * 20000, 20 * 17500, 20 * 15000, 20 * 15000, 20 * 17500, 20 * 20000,
+    20 * 25000, 20 * 30000, 20 * 40000, 20 * 50000, 20 * 75000, 20 * 100000, 20 * 125000, 20 * 150000,
+    20 * 175000, 20 * 200000, 20 * 225000, 20 * 235000, 20 * 225000, 20 * 200000, 20 * 175000, 20 * 150000,
+    20 * 125000, 20 * 100000, 20 * 75000, 20 * 60000, 20 * 50000, 20 * 40000, 20 * 30000, 20 * 25000,
+    20 * 22500, 20 * 20000, 20 * 17500, 20 * 15000, 20 * 15000, 20 * 17500, 20 * 20000, 20 * 25000,
+    20 * 30000, 20 * 40000, 20 * 50000, 20 * 60000, 20 * 75000, 20 * 90000, 20 * 100000, 20 * 110000
 };
 
 /* PŘEDIKTIVNÍ ŠKÁLOVÁNÍ */
@@ -58,8 +58,9 @@ public:
     double activation_time;   // Čas aktivace kontejneru
     double total_active_time; // Celkový čas, po který byl kontejner aktivní
     bool is_active;           // Indikátor, zda je kontejner aktivní
+    bool is_ready;            // Indikátor, zda je kontejner připraven přijímat požadavky
 
-    Container(int id) : id(id), active_requests(0), load(0.0), total_active_time(0.0), is_active(true) {
+    Container(int id) : id(id), active_requests(0), load(0.0), total_active_time(0.0), is_active(false), is_ready(false) {
         activation_time = Time;
         load_stat = new Stat();
     }
@@ -93,9 +94,31 @@ public:
     // Aktivuje kontejner
     void Activate() {
         if (!is_active) {
-            is_active = true;
+            is_active = true; // Kontejner bude aktivní po době spuštění
+            is_ready = false;
             activation_time = Time;
         }
+    }
+
+
+    // Spustí kontejner po době spuštění
+    void Start() {
+        is_active = true;
+        is_ready = true;
+        activation_time = Time;
+    }
+};
+
+/* PROCES SPUŠTĚNÍ KONTEJNERU */
+class ContainerStartup : public Event {
+public:
+    Container* container;
+
+    ContainerStartup(Container* c) : container(c) {}
+
+    void Behavior() {
+        container->Start();
+        cout << "Kontejner " << container->id << " je připraven v čase " << Time << endl;
     }
 };
 
@@ -112,7 +135,7 @@ public:
             Container* selected_container = nullptr;
 
             for (int i = 0; i < max_containers_created; i++) {
-                if (containers[i]->is_active && containers[i]->load < min_load) {
+                if (containers[i]->is_active && containers[i]->is_ready && containers[i]->load < min_load) {
                     min_load = containers[i]->load;
                     selected_container = containers[i];
                 }
@@ -142,7 +165,7 @@ public:
 
                 assigned = true;
             } else {
-                // Pokud žádný kontejner není dostupný (nemělo by nastat), počkáme a zkusíme znovu
+                // Pokud žádný kontejner není dostupný, počkáme a zkusíme znovu
                 Wait(0.01);
             }
         }
@@ -157,7 +180,6 @@ double GetInterarrivalTime() {
     return Exponential(interarrival_time);
 }
 
-
 void GeneratePredictedLoad() {
     // Posuneme predikci o jeden půlhodinový interval dopředu
     for (int i = 0; i < 47; i++) {
@@ -165,8 +187,6 @@ void GeneratePredictedLoad() {
     }
     predicted_load[47] = requests_per_interval[0]; // Poslední interval
 }
-
-
 
 /* GENERÁTOR POŽADAVKŮ */
 class RequestGenerator : public Event {
@@ -179,54 +199,54 @@ class RequestGenerator : public Event {
 /* FUNKCE PRO PŘIDÁNÍ A ODEBRÁNÍ KONTEJNERŮ */
 void AddContainer() {
     if (total_containers < MAX_CONTAINERS) {
-        int id = total_containers;
-        if (containers[id] == nullptr) {
+        Container* container_to_activate = nullptr;
+        // Vyhledáme neaktivní kontejner k reaktivaci
+        for (int i = 0; i < max_containers_created; i++) {
+            if (!containers[i]->is_active) {
+                container_to_activate = containers[i];
+                break;
+            }
+        }
+
+        if (container_to_activate != nullptr) {
+            // Reaktivujeme existující kontejner
+            container_to_activate->Activate();
+            (new ContainerStartup(container_to_activate))->Activate(Time + CONTAINER_STARTUP_TIME);
+            cout << "Reaktivuji kontejner " << container_to_activate->id << ", bude připraven v čase " << Time + CONTAINER_STARTUP_TIME << endl;
+        } else if (max_containers_created < MAX_CONTAINERS) {
+            // Vytvoříme nový kontejner
+            int id = max_containers_created;
             containers[id] = new Container(id);
             max_containers_created++;
-        } else {
             containers[id]->Activate();
+            (new ContainerStartup(containers[id]))->Activate(Time + CONTAINER_STARTUP_TIME);
+            cout << "Spouštím nový kontejner " << id << ", bude připraven v čase " << Time + CONTAINER_STARTUP_TIME << endl;
+        } else {
+            // Nelze přidat další kontejnery
+            cout << "Nelze přidat další kontejnery, dosažen maximální počet." << endl;
+            return;
         }
         total_containers++;
     }
 }
 
+
 void RemoveContainer() {
     if (total_containers > MIN_CONTAINERS) {
-        total_containers--;
-        containers[total_containers]->Deactivate();
+        // Najdeme aktivní kontejner s nejvyšším ID k deaktivaci
+        for (int i = max_containers_created - 1; i >= 0; i--) {
+            if (containers[i]->is_active) {
+                containers[i]->Deactivate();
+                total_containers--;
+                cout << "Deaktivuji kontejner " << containers[i]->id << " v čase " << Time << endl;
+                break;
+            }
+        }
     }
 }
 
+
 /* AUTOSCALERY */
-class ReactiveAutoscaler : public Event {
-    void Behavior() {
-        // Spočítáme průměrnou zátěž
-        double total_load = 0.0;
-        int active_containers = 0;
-        for (int i = 0; i < max_containers_created; i++) {
-            if (containers[i]->is_active) {
-                total_load += containers[i]->load;
-                active_containers++;
-            }
-        }
-        double average_load = total_load / active_containers;
-
-        // Škálování nahoru
-        if (average_load > SCALE_UP_LOAD && total_containers < MAX_CONTAINERS) {
-            AddContainer();
-            cout << "Reaktivní škálování nahoru na " << total_containers << " kontejnerů v čase " << Time << endl;
-        }
-
-        // Škálování dolů
-        if (average_load < SCALE_DOWN_LOAD && total_containers > MIN_CONTAINERS) {
-            RemoveContainer();
-            cout << "Reaktivní škálování dolů na " << total_containers << " kontejnerů v čase " << Time << endl;
-        }
-
-        Activate(Time + SCALING_INTERVAL);
-    }
-};
-
 class PredictiveAutoscaler : public Event {
     void Behavior() {
         int next_interval = ((int)(Time / 1800) + 1) % 48;
@@ -236,7 +256,7 @@ class PredictiveAutoscaler : public Event {
         double requests_in_interval = predicted_requests * (SCALING_INTERVAL / 1800.0);
 
         // Odhadnutý počet potřebných kontejnerů
-        const double DESIRED_LOAD = 6.5; // Nastavte požadovanou průměrnou zátěž
+        const double DESIRED_LOAD = 38; // Nastavte požadovanou průměrnou zátěž
         int required_containers = ceil((requests_in_interval * SERVICE_TIME) / (SCALING_INTERVAL * DESIRED_LOAD));
 
         // Zajištění minimálního a maximálního počtu kontejnerů
@@ -265,11 +285,66 @@ class PredictiveAutoscaler : public Event {
     }
 };
 
+class ReactiveAutoscaler : public Event {
+public:
+    void Behavior() {
+        // Spočítáme průměrnou zátěž pouze z připravených kontejnerů
+        double total_load = 0.0;
+        int active_ready_containers = 0;
+        for (int i = 0; i < max_containers_created; i++) {
+            if (containers[i]->is_active && containers[i]->is_ready) {
+                total_load += containers[i]->load;
+                active_ready_containers++;
+            }
+        }
+
+        double average_load = 0.0;
+        if (active_ready_containers > 0) {
+            average_load = total_load / active_ready_containers;
+        }
+
+        // Počet kontejnerů ve spouštění
+        int starting_containers = 0;
+        for (int i = 0; i < max_containers_created; i++) {
+            if (containers[i]->is_active && !containers[i]->is_ready) {
+                starting_containers++;
+            }
+        }
+
+        // Škálování nahoru
+        if (average_load > SCALE_UP_LOAD && total_containers < MAX_CONTAINERS) {
+            int containers_to_add = 1; // Můžete upravit podle potřeby
+            // Zohledníme počet kontejnerů ve spouštění
+            int available_slots = MAX_CONTAINERS - total_containers;
+            containers_to_add = min(containers_to_add, available_slots);
+
+            if (starting_containers == 0) {
+                for (int i = 0; i < containers_to_add; ++i) {
+                    AddContainer();
+                }
+                cout << "Reaktivní škálování nahoru na " << total_containers << " kontejnerů v čase " << Time << endl;
+            } else {
+                cout << "Čekám na spuštění kontejnerů, již se spouští " << starting_containers << " kontejnerů." << endl;
+            }
+        }
+
+        // Škálování dolů
+        else if (average_load < SCALE_DOWN_LOAD && total_containers > MIN_CONTAINERS) {
+            RemoveContainer();
+            cout << "Reaktivní škálování dolů na " << total_containers << " kontejnerů v čase " << Time << endl;
+        }
+
+        Activate(Time + SCALING_INTERVAL);
+    }
+};
+
 
 /* INITIALIZACE KONTEJNERŮ */
 void InitContainers(int count) {
     for (int i = 0; i < count; i++) {
         containers[i] = new Container(i);
+        containers[i]->is_active = true;
+        containers[i]->is_ready = true;
         total_containers++;
         max_containers_created++;
     }
@@ -280,6 +355,11 @@ int main() {
     // Inicializace simulace
     Init(0, SIMULATION_TIME);
     RandomSeed(time(NULL));
+
+    // Inicializace pole containers na nullptr
+    for (int i = 0; i < MAX_CONTAINERS; i++) {
+        containers[i] = nullptr;
+    }
 
     // Generování predikované zátěže
     GeneratePredictedLoad();
