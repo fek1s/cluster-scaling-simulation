@@ -26,18 +26,18 @@ long total_requests = 0;
 double operating_cost = 0.0;
 
 /* DATASET ZÁTĚŽE */
-int requests_per_interval[48] = {
+int requests_per_interval[24] = {
     // Hodnoty intenzity požadavků pro každou půlhodinu
     // Například:
-    2 * 25000, 2 * 22500, 2 * 20000, 2 * 17500, 2 * 15000, 2 * 15000, 2 * 17500, 2 * 20000,
-    2 * 25000, 2 * 30000, 2 * 40000, 2 * 50000, 2 * 75000, 2 * 100000, 2 * 125000, 2 * 150000,
-    2 * 175000, 2 * 200000, 2 * 225000, 2 * 235000, 2 * 225000, 2 * 200000, 2 * 175000, 2 * 150000,
-    2 * 125000, 2 * 100000, 2 * 75000, 2 * 60000, 2 * 50000, 2 * 40000, 2 * 30000, 2 * 25000,
-    2 * 22500, 2 * 20000, 2 * 17500, 2 * 15000, 2 * 15000, 2 * 17500, 2 * 20000, 2 * 25000,
-    2 * 30000, 2 * 40000, 2 * 50000, 2 * 60000, 2 * 75000, 2 * 90000, 2 * 100000, 2 * 110000
+    2 * 25000,  2 * 20000,  2 * 15000,  2 * 17500,
+    2 * 25000,  2 * 40000,  2 * 75000,  2 * 125000,
+    2 * 175000, 2 * 225000, 2 * 225000, 2 * 175000,
+    2 * 125000, 2 * 75000,  2 * 50000,  2 * 30000,
+    2 * 22500,  2 * 17500,  2 * 15000,  2 * 20000,
+    2 * 30000,  2 * 50000,  2 * 75000,  2 * 100000
 };
 
-/* PŘEDIKTIVNÍ ŠKÁLOVÁNÍ */
+/* PREDIKTIVNÍ ŠKÁLOVÁNÍ */
 vector<int> predicted_load(48, 0);
 
 /* STATISTIKY */
@@ -151,9 +151,18 @@ public:
 
 /* FUNKCE PRO GENEROVÁNÍ INTERVALU MEZI PŘÍCHODY POŽADAVKŮ */
 double GetInterarrivalTime() {
-    int current_interval = ((int)(Time / 1800)) % 48; // 1800 sekund = 30 minut
-    int requests_in_interval = requests_per_interval[current_interval];
-    double interarrival_time = 1800.0 / requests_in_interval;
+
+    /* After how many seconds is the average simulated requests interarrival recalculated */
+    double time_span = 60.0;
+
+    int int_time_span = (int)(time_span);
+    int current_hour = (int)(Time / 3600) % 24;
+    int requests_per_floor_hour = requests_per_interval[current_hour];
+    int requests_per_ceil_hour = requests_per_interval[current_hour + 1];
+    int current_time_span = (int)(Time / int_time_span) % int_time_span;
+    int requests_per_time_span = ((int_time_span - current_time_span) / int_time_span * requests_per_ceil_hour)
+                                + (current_time_span / int_time_span * requests_per_floor_hour);
+    double interarrival_time = time_span / requests_per_time_span;
     return Exponential(interarrival_time);
 }
 
