@@ -159,9 +159,9 @@ double GetInterarrivalTime() {
     int current_hour = (int)(Time / 3600) % 24;
     int requests_per_floor_hour = requests_per_interval[current_hour];
     int requests_per_ceil_hour = requests_per_interval[current_hour + 1];
-    int current_time_span = (int)(Time / int_time_span) % int_time_span;
-    int requests_per_time_span = ((int_time_span - current_time_span) / int_time_span * requests_per_ceil_hour)
-                                + (current_time_span / int_time_span * requests_per_floor_hour);
+    int current_time_span = (int)(Time / 3600 * int_time_span) % int_time_span;
+    int requests_per_time_span = (((int_time_span - current_time_span) * requests_per_floor_hour) / int_time_span)
+                                + ((current_time_span * requests_per_ceil_hour) / int_time_span);
     double interarrival_time = time_span / requests_per_time_span;
     return Exponential(interarrival_time);
 }
