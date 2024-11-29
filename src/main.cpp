@@ -8,17 +8,21 @@
 using namespace std;
 
 /* PARAMETRY SIMULACE */
-const double SIMULATION_TIME = 24 * 3600;  // Simulujeme 24 hodin (v sekundách)
+const int SIMULATION_TIME = 24 * 3600;     // Simulujeme 24 hodin (v sekundách)
+const int SIMULATION_INTERVAL = 60;        // Simulujeme zátěž po minutových intervalech (v sekundách)
 const double SERVICE_TIME = 0.1;           // Základní čas zpracování jednoho požadavku (v sekundách)
 const int MAX_CONTAINERS = 40;
 const int MIN_CONTAINERS = 1;
-const double SCALING_INTERVAL = 2;         // Interval kontroly pro škálování (v minutách)
+const int SCALING_INTERVAL = 2;            // Interval kontroly pro škálování (v minutách)
 const double SLA_RESPONSE_TIME = 0.2;      // SLA: 95% požadavků musí být obslouženo do 200 ms
 const double COST_PER_CONTAINER = 0.1;     // Náklady na jeden kontejner za hodinu
 const double ALPHA = 0.02;                 // Koeficient ovlivňující nárůst latence
-const double SCALE_UP_LOAD = 38;           // Prahová hodnota pro škálování nahoru (průměrná zátěž)
-const double SCALE_DOWN_LOAD = 10;         // Prahová hodnota pro škálování dolů (průměrná zátěž)
-const double CONTAINER_STARTUP_TIME = 0;   // Doba spuštění kontejneru v sekundách
+const int SCALE_UP_LOAD = 38;              // Prahová hodnota pro reaktivní škálování nahoru (průměrná zátěž)
+const int SCALE_DOWN_LOAD = 10;            // Prahová hodnota pro reaktivní škálování dolů (průměrná zátěž)
+const double DESIRED_PERCENTAGE_LOAD = 95; // Maximální průměrná zátěž kontejneru v % pro prediktivní škálování
+// Výpočet DESIRED_LOAD - maximální průměrný počet současně se vyřizujících požadavků v jednom kontejneru
+const int DESIRED_LOAD = ((((DESIRED_PERCENTAGE_LOAD / 100) * SLA_RESPONSE_TIME) / SERVICE_TIME) - 1) / ALPHA;
+const int CONTAINER_STARTUP_TIME = 15;     // Doba spuštění kontejneru v sekundách
 const int REQUESTS_MULTIPLIER = 25;        // Násobitel počtu požadavků
 
 /* GLOBÁLNÍ PROMĚNNÉ */
@@ -30,7 +34,10 @@ double operating_cost = 0.0;
 
 
 /* PREDIKTIVNÍ ŠKÁLOVÁNÍ */
-vector<int> predicted_load(1440, 0);
+vector<int> predicted_load((SIMULATION_TIME / SIMULATION_INTERVAL), 0);
+
+/* REÁLNÁ ZÁTĚŽ */
+vector<int> real_load((SIMULATION_TIME / SIMULATION_INTERVAL), 0);
 
 /* STATISTIKY */
 Stat response_time_stat("Doba odezvy");
@@ -166,18 +173,18 @@ public:
 
 /* FUNKCE PRO GENEROVÁNÍ INTERVALU MEZI PŘÍCHODY POŽADAVKŮ */
 double GetInterarrivalTime() {
-    int current_interval = ((int)(Time / 60)) % 1440; // 60 sekund = 1 minuta
+    int current_interval = ((int)(Time / SIMULATION_INTERVAL)) % (SIMULATION_TIME / SIMULATION_INTERVAL);
     int requests_in_interval = REQUESTS_MULTIPLIER * requests_per_minute[current_interval];
-    double interarrival_time = 60.0 / requests_in_interval;
+    double interarrival_time = SIMULATION_INTERVAL * 1.0 / requests_in_interval;
     return Exponential(interarrival_time);
 }
 
 void GeneratePredictedLoad() {
     // Posuneme predikci o jednu minutu dopředu
-    for (int i = 0; i < 1439; i++) {
+    for (int i = 0; i < ((SIMULATION_TIME / SIMULATION_INTERVAL) - 1); i++) {
         predicted_load[i] =  REQUESTS_MULTIPLIER * requests_per_minute[i + 1];
     }
-    predicted_load[1439] = REQUESTS_MULTIPLIER * requests_per_minute[0]; // Poslední interval
+    predicted_load[((SIMULATION_TIME / SIMULATION_INTERVAL) - 1)] = REQUESTS_MULTIPLIER * requests_per_minute[0]; // Poslední interval
 }
 
 
@@ -243,21 +250,22 @@ void RemoveContainer() {
 /* AUTOSCALERY */
 class PredictiveAutoscaler : public Event {
     void Behavior() {
-        int next_interval = ((int)(Time / 60) + 1) % 1440;
+        int next_interval = ((int)(Time / SIMULATION_INTERVAL) + 1) % (SIMULATION_TIME / SIMULATION_INTERVAL);
 
-        /* Výpočet maximálního množství požadavků za minutu v horizontu SCALING_INTERVAL (době zpřístupnění nového kontejneru)*/
+        /* Výpočet maximálního množství požadavků za minutu 
+        v horizontu SCALING_INTERVAL (době zpřístupnění nového kontejneru) + CONTAINER_STARTUP_TIME (doba vytvoření nového kontejneru)*/
         int max_predicted_requests = 0;
-        for (int i = 0; i < SCALING_INTERVAL; ++i) {
-            int idx = (next_interval + i) % 1440;
+        for (int i = floor(CONTAINER_STARTUP_TIME / SIMULATION_INTERVAL); i < (SCALING_INTERVAL + ceil(CONTAINER_STARTUP_TIME / SIMULATION_INTERVAL)); ++i) {
+            int idx = (next_interval + i) % (SIMULATION_TIME / SIMULATION_INTERVAL);
             if (max_predicted_requests < predicted_load[idx]){
                 max_predicted_requests = predicted_load[idx];
             }
         }
-        max_predicted_requests = max_predicted_requests / 60;
+        max_predicted_requests = max_predicted_requests / SIMULATION_INTERVAL;
 
+        double average_procesing_time = SERVICE_TIME * (1 + (ALPHA * DESIRED_LOAD));
         // Odhadnutý počet potřebných kontejnerů
-        const int DESIRED_LOAD = 38; // Nastavte požadovanou průměrnou zátěž TODO
-        int required_containers = ((max_predicted_requests * SERVICE_TIME) / (DESIRED_LOAD)) + 1;
+        int required_containers = ((max_predicted_requests * average_procesing_time) / (DESIRED_LOAD)) + 1;
 
         // Zajištění minimálního a maximálního počtu kontejnerů
         required_containers = max(required_containers, MIN_CONTAINERS);
