@@ -183,10 +183,12 @@ void GenerateRealRequestsPerMinute() {
     for (int i = 0; i < (SIMULATION_TIME / SIMULATION_INTERVAL); i++) {
 
         // Generování reálné zátěže s normálním rozdělením
-        double mean = REQUESTS_MULTIPLIER * requests_per_minute[i];
-        // 15% odchylka od průměru
+        int mean = REQUESTS_MULTIPLIER * requests_per_minute[i];
+
+        // 15% odchylka od průměrné hodnoty
         double deviation = 0.15 * mean;
-        // Náhodný počet požadavků s normálním rozdělením
+
+        // Vygenerování náhodného počtu požadavků
         double real_requests = Normal(mean, deviation);
 
         // Zaokrouhlení na celé číslo a omezení na nezáporné hodnoty
