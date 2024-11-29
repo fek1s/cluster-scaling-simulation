@@ -14,7 +14,7 @@
 #include <limits>
 
 #include "simlib.h"
-#include "dataset.h"
+#include "dataset.hpp"
 
 using namespace std;
 
