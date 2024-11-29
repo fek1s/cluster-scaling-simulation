@@ -1,29 +1,63 @@
+/*
+ *  Název programu: Simulace Škálování - Reaktivní vs Prediktivní přístup
+ * 
+ *  Autors: Jakub Fukala - xfukal01
+ *           Adam Kozubek - xkozub09
+ * 
+ *  Datum vytvoření: 29.11.2024
+ */
+
 #include <iostream>
+#include <iomanip>
 #include <cmath>
 #include <vector>
 #include <limits>
+
 #include "simlib.h"
 #include "dataset.h"
 
 using namespace std;
 
-/* PARAMETRY SIMULACE */
-const int SIMULATION_TIME = 24 * 3600;     // Simulujeme 24 hodin (v sekundách)
-const int SIMULATION_INTERVAL = 60;        // Simulujeme zátěž po minutových intervalech (v sekundách)
-const double SERVICE_TIME = 0.1;           // Základní čas zpracování jednoho požadavku (v sekundách)
-const int MAX_CONTAINERS = 40;
+
+/* __PARAMETRY SIMULACE_______________________________________________________________________________________________________ */
+
+/* --Obecné parametry-- */
+const int REQUESTS_MULTIPLIER = 25;            // Násobitel počtu požadavků
+
+const string SCALING_MODEL == "REACTIVE"       // <<< Choose the scaling model <<<
+//const string SCALING_MODEL == "PREDICTIVE"
+
+const int MAX_CONTAINERS = 40;                 // MAX a MIN počet dostupných kontejnerů
 const int MIN_CONTAINERS = 1;
-const int SCALING_INTERVAL = 2;            // Interval kontroly pro škálování (v minutách)
-const double SLA_RESPONSE_TIME = 0.2;      // SLA: 95% požadavků musí být obslouženo do 200 ms
-const double COST_PER_CONTAINER = 0.1;     // Náklady na jeden kontejner za hodinu
-const double ALPHA = 0.02;                 // Koeficient ovlivňující nárůst latence
-const int SCALE_UP_LOAD = 38;              // Prahová hodnota pro reaktivní škálování nahoru (průměrná zátěž)
-const int SCALE_DOWN_LOAD = 10;            // Prahová hodnota pro reaktivní škálování dolů (průměrná zátěž)
-const double DESIRED_PERCENTAGE_LOAD = 85; // Maximální průměrná zátěž kontejneru v % pro prediktivní škálování
-// Výpočet DESIRED_LOAD - maximální průměrný počet současně se vyřizujících požadavků v jednom kontejneru
+const int SCALING_INTERVAL = 2;                // Interval kontroly pro škálování (v minutách)
+const double SLA_RESPONSE_TIME = 0.2;          // SLA: 95% požadavků musí být obslouženo do 200 ms
+const double COST_PER_CONTAINER = 0.1;         // Náklady na jeden kontejner za hodinu
+const double ALPHA = 0.02;                     // Koeficient ovlivňující nárůst latence
+
+/* --Parametry pro REACTIVE-- */
+const int SCALE_UP_LOAD_PERCENTAGE = 90;       // Prahová hodnota pro reaktivní škálování nahoru (průměrná zátěž v %)
+const int SCALE_DOWN_LOAD_PERCENTAGE = 40;     // Prahová hodnota pro reaktivní škálování dolů (průměrná zátěž v %)
+
+/* --Parametry pro PREDICTIVE-- */
+const double DESIRED_PERCENTAGE_LOAD = 85;     // Maximální průměrná zátěž kontejneru v % pro prediktivní škálování
+const int SCALE_UP_THRESHOLD = 1;              // Minimální počet nových kontejnerů pro aktivaci přeškálování
+const int SCALE_DOWN_THRESHOLD = 1;            // Minimální počet odstavovaných kontejnerů pro aktivaci přeškálování
+const int CONTAINER_STARTUP_TIME = 15;         // Doba spuštění kontejneru v sekundách
+
+/* ___________________________________________________________________________________________________________________________ */
+
+
+/* KONSTANTY */
+const int SIMULATION_TIME = 24 * 3600;         // Simulujeme 24 hodin (v sekundách)
+const int SIMULATION_INTERVAL = 60;            // Simulujeme zátěž po minutových intervalech (v sekundách)
+const double SERVICE_TIME = 0.1;               // Základní čas zpracování jednoho požadavku (v sekundách)
+
+// Predictive - Výpočet DESIRED_LOAD - maximální průměrný počet současně se vyřizujících požadavků v jednom kontejneru
 const int DESIRED_LOAD = ((((DESIRED_PERCENTAGE_LOAD / 100) * SLA_RESPONSE_TIME) / SERVICE_TIME) - 1) / ALPHA;
-const int CONTAINER_STARTUP_TIME = 15;     // Doba spuštění kontejneru v sekundách
-const int REQUESTS_MULTIPLIER = 25;        // Násobitel počtu požadavků
+// Reactive - Výpočet SCALE_UP_LOAD a SCALE_DOWN_LOAD - okraje intervalu, mimo nějž dochází k přeškálování
+const int SCALE_UP_LOAD = ((((SCALE_UP_LOAD_PERCENTAGE / 100) * SLA_RESPONSE_TIME) / SERVICE_TIME) - 1) / ALPHA;
+const int SCALE_DOWN_LOAD = ((((SCALE_DOWN_LOAD_PERCENTAGE / 100) * SLA_RESPONSE_TIME) / SERVICE_TIME) - 1) / ALPHA;
+
 
 /* GLOBÁLNÍ PROMĚNNÉ */
 int total_containers = 0;
@@ -43,17 +77,22 @@ vector<int> real_requests_per_minute((SIMULATION_TIME / SIMULATION_INTERVAL), 0)
 Stat response_time_stat("Doba odezvy");
 Histogram response_time_hist("Histogram doby odezvy", 0, 0.05, 20);
 
+/* POMOCNÁ FUNKCE */
+string PrintTime(int timeInSeconds);
+
+
 /* Před deklarací třídy Container deklarujeme pole containers */
 class Container; // Předběžná deklarace třídy
 Container* containers[MAX_CONTAINERS];    // Pole kontejnerů
 
+
 /* TŘÍDA KONTEJNERU */
 class Container {
 public:
-    int id;                  // Identifikátor kontejneru
-    int active_requests;     // Počet aktivních požadavků
-    double load;             // Zátěž kontejneru (počet aktivních požadavků)
-    Stat* load_stat;         // Statistika zátěže
+    int id;                   // Identifikátor kontejneru
+    int active_requests;      // Počet aktivních požadavků
+    double load;              // Zátěž kontejneru (počet aktivních požadavků)
+    Stat* load_stat;          // Statistika zátěže
     double activation_time;   // Čas aktivace kontejneru
     double total_active_time; // Celkový čas, po který byl kontejner aktivní
     bool is_active;           // Indikátor, zda je kontejner aktivní
@@ -99,7 +138,6 @@ public:
         }
     }
 
-
     // Spustí kontejner po době spuštění
     void Start() {
         is_active = true;
@@ -117,9 +155,10 @@ public:
 
     void Behavior() {
         container->Start();
-        cout << "Kontejner " << container->id << " je připraven v čase " << Time << endl;
+        cout << "Kontejner " << container->id << " je připraven v čase " << PrintTime(Time) << endl;
     }
 };
+
 
 /* TŘÍDA POŽADAVKU */
 class Request : public Process {
@@ -171,6 +210,7 @@ public:
     }
 };
 
+
 /* FUNKCE PRO GENEROVÁNÍ INTERVALU MEZI PŘÍCHODY POŽADAVKŮ */
 double GetInterarrivalTime() {
     int current_interval = ((int)(Time / SIMULATION_INTERVAL)) % (SIMULATION_TIME / SIMULATION_INTERVAL);
@@ -179,6 +219,7 @@ double GetInterarrivalTime() {
     return Exponential(interarrival_time);
 }
 
+/* FUNKCE PRO GENEROVÁNÍ REÁLNÉ ZÁTĚŽE */
 void GenerateRealRequestsPerMinute() {
     for (int i = 0; i < (SIMULATION_TIME / SIMULATION_INTERVAL); i++) {
 
@@ -197,6 +238,7 @@ void GenerateRealRequestsPerMinute() {
     predicted_load[((SIMULATION_TIME / SIMULATION_INTERVAL) - 1)] = REQUESTS_MULTIPLIER * requests_per_minute[0]; // Poslední interval
 }
 
+/* FUNKCE PRO GENEROVÁNÍ PREDIKOVANÉ ZÁTĚŽE */
 void GeneratePredictedLoad() {
     for (int i = 0; i < (SIMULATION_TIME / SIMULATION_INTERVAL); i++) {
         predicted_load[i] =  REQUESTS_MULTIPLIER * requests_per_minute[i];
@@ -211,6 +253,7 @@ class RequestGenerator : public Event {
         Activate(Time + GetInterarrivalTime());
     }
 };
+
 
 /* FUNKCE PRO PŘIDÁNÍ A ODEBRÁNÍ KONTEJNERŮ */
 void AddContainer() {
@@ -228,7 +271,7 @@ void AddContainer() {
             // Reaktivujeme existující kontejner
             container_to_activate->Activate();
             (new ContainerStartup(container_to_activate))->Activate(Time + CONTAINER_STARTUP_TIME);
-            cout << "Reaktivuji kontejner " << container_to_activate->id << ", bude připraven v čase " << Time + CONTAINER_STARTUP_TIME << endl;
+            cout << "Reaktivuji kontejner " << container_to_activate->id << ", bude připraven v čase " << PrintTime(Time + CONTAINER_STARTUP_TIME) << endl;
         } else if (max_containers_created < MAX_CONTAINERS) {
             // Vytvoříme nový kontejner
             int id = max_containers_created;
@@ -236,7 +279,7 @@ void AddContainer() {
             max_containers_created++;
             containers[id]->Activate();
             (new ContainerStartup(containers[id]))->Activate(Time + CONTAINER_STARTUP_TIME);
-            cout << "Spouštím nový kontejner " << id << ", bude připraven v čase " << Time + CONTAINER_STARTUP_TIME << endl;
+            cout << "Spouštím nový kontejner " << id << ", bude připraven v čase " << PrintTime(Time + CONTAINER_STARTUP_TIME) << endl;
         } else {
             // Nelze přidat další kontejnery
             cout << "Nelze přidat další kontejnery, dosažen maximální počet." << endl;
@@ -245,8 +288,6 @@ void AddContainer() {
         total_containers++;
     }
 }
-
-
 void RemoveContainer() {
     if (total_containers > MIN_CONTAINERS) {
         // Najdeme aktivní kontejner s nejvyšším ID k deaktivaci
@@ -254,7 +295,7 @@ void RemoveContainer() {
             if (containers[i]->is_active) {
                 containers[i]->Deactivate();
                 total_containers--;
-                cout << "Deaktivuji kontejner " << containers[i]->id << " v čase " << Time << endl;
+                cout << "Deaktivuji kontejner " << containers[i]->id << " v čase " << PrintTime(Time) << endl;
                 break;
             }
         }
@@ -262,8 +303,10 @@ void RemoveContainer() {
 }
 
 
+
 /* AUTOSCALERY */
-/* AUTOSCALERY */
+
+/* PREDIKTIVNÍ METODA */
 class PredictiveAutoscaler : public Event {
     void Behavior() {
         int next_interval = ((int)(Time / SIMULATION_INTERVAL) + 1) % (SIMULATION_TIME / SIMULATION_INTERVAL);
@@ -272,7 +315,7 @@ class PredictiveAutoscaler : public Event {
         v horizontu SCALING_INTERVAL (době zpřístupnění nového kontejneru) + CONTAINER_STARTUP_TIME (doba vytvoření nového kontejneru)*/
         int max_predicted_requests = 0;
         for (int i = floor(CONTAINER_STARTUP_TIME / SIMULATION_INTERVAL); i < (SCALING_INTERVAL + ceil(CONTAINER_STARTUP_TIME / SIMULATION_INTERVAL)); ++i) {
-            int idx = (next_interval + i) % (SIMULATION_TIME / SIMULATION_INTERVAL);
+            int idx = min(((next_interval + i) % (SIMULATION_TIME / SIMULATION_INTERVAL)), ((SIMULATION_TIME / SIMULATION_INTERVAL) - 1)) ;
             if (max_predicted_requests < predicted_load[idx]){
                 max_predicted_requests = predicted_load[idx];
             }
@@ -287,29 +330,28 @@ class PredictiveAutoscaler : public Event {
         required_containers = max(required_containers, MIN_CONTAINERS);
         required_containers = min(required_containers, MAX_CONTAINERS);
 
-        // Implementace hystereze
-        const int SCALE_UP_THRESHOLD = 1;
-        const int SCALE_DOWN_THRESHOLD = 1;
-
+        // Škálování o požadovaný počet kontejnerů
         if (required_containers >= total_containers + SCALE_UP_THRESHOLD) {
             int containers_to_add = min(required_containers - total_containers, MAX_CONTAINERS - total_containers);
             for (int i = 0; i < containers_to_add; ++i) {
                 AddContainer();
             }
-            cout << "Prediktivní škálování nahoru na " << total_containers << " kontejnerů v čase " << Time << endl;
+            cout << "Prediktivní škálování nahoru na " << total_containers << " kontejnerů v čase " << PrintTime(Time) << endl;
         } else if (required_containers <= total_containers - SCALE_DOWN_THRESHOLD) {
             int containers_to_remove = min(total_containers - required_containers, total_containers - MIN_CONTAINERS);
             for (int i = 0; i < containers_to_remove; ++i) {
                 RemoveContainer();
             }
-            cout << "Prediktivní škálování dolů na " << total_containers << " kontejnerů v čase " << Time << endl;
+            cout << "Prediktivní škálování dolů na " << total_containers << " kontejnerů v čase " << PrintTime(Time) << endl;
         }
-
+        
+        // Uspání po čas další kontroly
         Activate(Time + SCALING_INTERVAL*60);
     }
 };
 
 
+/* REAKTIVNÍ METODA */
 class ReactiveAutoscaler : public Event {
 public:
     void Behavior() {
@@ -322,7 +364,6 @@ public:
                 active_ready_containers++;
             }
         }
-
         double average_load = 0.0;
         if (active_ready_containers > 0) {
             average_load = total_load / active_ready_containers;
@@ -347,7 +388,7 @@ public:
                 for (int i = 0; i < containers_to_add; ++i) {
                     AddContainer();
                 }
-                cout << "Reaktivní škálování nahoru na " << total_containers << " kontejnerů v čase " << Time << endl;
+                cout << "Reaktivní škálování nahoru na " << total_containers << " kontejnerů v čase " << PrintTime(Time) << endl;
             } else {
                 cout << "Čekám na spuštění kontejnerů, již se spouští " << starting_containers << " kontejnerů." << endl;
             }
@@ -356,9 +397,10 @@ public:
         // Škálování dolů
         else if (average_load < SCALE_DOWN_LOAD && total_containers > MIN_CONTAINERS) {
             RemoveContainer();
-            cout << "Reaktivní škálování dolů na " << total_containers << " kontejnerů v čase " << Time << endl;
+            cout << "Reaktivní škálování dolů na " << total_containers << " kontejnerů v čase " << PrintTime(Time) << endl;
         }
-
+        
+        // Uspání po čas další kontroly
         Activate(Time + SCALING_INTERVAL*60);
     }
 };
@@ -374,6 +416,7 @@ void InitContainers(int count) {
         max_containers_created++;
     }
 }
+
 
 /* HLAVNÍ FUNKCE */
 int main() {
@@ -398,9 +441,15 @@ int main() {
     // Spuštění generátoru požadavků
     (new RequestGenerator)->Activate();
 
-    // Spuštění autoscaleru                      /* <<< Zde vybrat model škálování <<< */
-    //(new ReactiveAutoscaler)->Activate();
-    (new PredictiveAutoscaler)->Activate();
+    // Spuštění autoscaleru
+    if (SCALING_MODEL == "REACTIVE")
+        (new ReactiveAutoscaler)->Activate();
+    else if (SCALING_MODEL == "PREDICTIVE")
+        (new PredictiveAutoscaler)->Activate();
+    else{
+        cerr << "Please choose the scaling model (\"REACTIVE\" or \"PREDICTIVE\")";
+        return 1;
+    }
 
     // Spuštění simulace
     Run();
@@ -438,4 +487,20 @@ int main() {
     }
 
     return 0;
+}
+/* konec MAIN */
+
+
+// Pomocná funkce pro převod času (sekundy) na formátovaný řetězec hh:mm:ss
+string PrintTime(int timeInSeconds) {
+    int hours = static_cast<int>(timeInSeconds) / 3600;
+    int minutes = (static_cast<int>(timeInSeconds) % 3600) / 60;
+    int seconds = static_cast<int>(timeInSeconds) % 60;
+
+    ostringstream formattedTime;
+    formattedTime << setw(2) << setfill('0') << hours << ":"
+                  << setw(2) << setfill('0') << minutes << ":"
+                  << setw(2) << setfill('0') << seconds;
+
+    return formattedTime.str();
 }
