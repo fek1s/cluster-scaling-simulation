@@ -24,8 +24,8 @@ using namespace std;
 /* --Obecné parametry-- */
 const int REQUESTS_MULTIPLIER = 25;            // Násobitel počtu požadavků
 
-const string SCALING_MODEL == "REACTIVE"       // <<< Choose the scaling model <<<
-//const string SCALING_MODEL == "PREDICTIVE"
+const string SCALING_MODEL = "REACTIVE";      // <<< Choose the scaling model <<<
+//const string SCALING_MODEL = "PREDICTIVE"
 
 const int MAX_CONTAINERS = 40;                 // MAX a MIN počet dostupných kontejnerů
 const int MIN_CONTAINERS = 1;
@@ -35,8 +35,8 @@ const double COST_PER_CONTAINER = 0.1;         // Náklady na jeden kontejner za
 const double ALPHA = 0.02;                     // Koeficient ovlivňující nárůst latence
 
 /* --Parametry pro REACTIVE-- */
-const int SCALE_UP_LOAD_PERCENTAGE = 90;       // Prahová hodnota pro reaktivní škálování nahoru (průměrná zátěž v %)
-const int SCALE_DOWN_LOAD_PERCENTAGE = 40;     // Prahová hodnota pro reaktivní škálování dolů (průměrná zátěž v %)
+const double SCALE_UP_LOAD_PERCENTAGE = 70;    // Prahová hodnota pro reaktivní škálování nahoru (průměrná zátěž v %)
+const double SCALE_DOWN_LOAD_PERCENTAGE = 20;  // Prahová hodnota pro reaktivní škálování dolů (průměrná zátěž v %)
 
 /* --Parametry pro PREDICTIVE-- */
 const double DESIRED_PERCENTAGE_LOAD = 85;     // Maximální průměrná zátěž kontejneru v % pro prediktivní škálování
@@ -53,10 +53,10 @@ const int SIMULATION_INTERVAL = 60;            // Simulujeme zátěž po minutov
 const double SERVICE_TIME = 0.1;               // Základní čas zpracování jednoho požadavku (v sekundách)
 
 // Predictive - Výpočet DESIRED_LOAD - maximální průměrný počet současně se vyřizujících požadavků v jednom kontejneru
-const int DESIRED_LOAD = ((((DESIRED_PERCENTAGE_LOAD / 100) * SLA_RESPONSE_TIME) / SERVICE_TIME) - 1) / ALPHA;
+const int DESIRED_LOAD = (DESIRED_PERCENTAGE_LOAD * (SLA_RESPONSE_TIME - SERVICE_TIME)) / (100.0 * SERVICE_TIME * ALPHA);
 // Reactive - Výpočet SCALE_UP_LOAD a SCALE_DOWN_LOAD - okraje intervalu, mimo nějž dochází k přeškálování
-const int SCALE_UP_LOAD = ((((SCALE_UP_LOAD_PERCENTAGE / 100) * SLA_RESPONSE_TIME) / SERVICE_TIME) - 1) / ALPHA;
-const int SCALE_DOWN_LOAD = ((((SCALE_DOWN_LOAD_PERCENTAGE / 100) * SLA_RESPONSE_TIME) / SERVICE_TIME) - 1) / ALPHA;
+const int SCALE_UP_LOAD = (SCALE_UP_LOAD_PERCENTAGE * (SLA_RESPONSE_TIME - SERVICE_TIME)) / (100.0 * SERVICE_TIME * ALPHA);
+const int SCALE_DOWN_LOAD = (SCALE_DOWN_LOAD_PERCENTAGE * (SLA_RESPONSE_TIME - SERVICE_TIME)) / (100.0 * SERVICE_TIME * ALPHA);
 
 
 /* GLOBÁLNÍ PROMĚNNÉ */
@@ -420,6 +420,7 @@ void InitContainers(int count) {
 
 /* HLAVNÍ FUNKCE */
 int main() {
+
     // Inicializace simulace
     Init(0, SIMULATION_TIME);
     RandomSeed(time(NULL));
@@ -447,7 +448,7 @@ int main() {
     else if (SCALING_MODEL == "PREDICTIVE")
         (new PredictiveAutoscaler)->Activate();
     else{
-        cerr << "Please choose the scaling model (\"REACTIVE\" or \"PREDICTIVE\")";
+        cerr << "Prosím vyberte škálovací model: (\"REACTIVE\" nebo \"PREDICTIVE\")";
         return 1;
     }
 
