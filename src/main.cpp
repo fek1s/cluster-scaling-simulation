@@ -37,7 +37,7 @@ double operating_cost = 0.0;
 vector<int> predicted_load((SIMULATION_TIME / SIMULATION_INTERVAL), 0);
 
 /* REÁLNÁ ZÁTĚŽ */
-vector<int> real_load((SIMULATION_TIME / SIMULATION_INTERVAL), 0);
+vector<int> real_requests_per_minute((SIMULATION_TIME / SIMULATION_INTERVAL), 0);
 
 /* STATISTIKY */
 Stat response_time_stat("Doba odezvy");
@@ -174,17 +174,22 @@ public:
 /* FUNKCE PRO GENEROVÁNÍ INTERVALU MEZI PŘÍCHODY POŽADAVKŮ */
 double GetInterarrivalTime() {
     int current_interval = ((int)(Time / SIMULATION_INTERVAL)) % (SIMULATION_TIME / SIMULATION_INTERVAL);
-    int requests_in_interval = REQUESTS_MULTIPLIER * requests_per_minute[current_interval];
+    int requests_in_interval = real_requests_per_minute[current_interval];
     double interarrival_time = SIMULATION_INTERVAL * 1.0 / requests_in_interval;
     return Exponential(interarrival_time);
 }
 
-void GeneratePredictedLoad() {
-    // Posuneme predikci o jednu minutu dopředu
-    for (int i = 0; i < ((SIMULATION_TIME / SIMULATION_INTERVAL) - 1); i++) {
-        predicted_load[i] =  REQUESTS_MULTIPLIER * requests_per_minute[i + 1];
+void GenerateRealRequestsPerMinute() {
+    for (int i = 0; i < (SIMULATION_TIME / SIMULATION_INTERVAL); i++) {
+        real_requests_per_minute[i] = /*zde vlož něco co to rozptýlí s normálním rozdělením a směrodatnou odchylkou 15% */ REQUESTS_MULTIPLIER * requests_per_minute[i];
     }
     predicted_load[((SIMULATION_TIME / SIMULATION_INTERVAL) - 1)] = REQUESTS_MULTIPLIER * requests_per_minute[0]; // Poslední interval
+}
+
+void GeneratePredictedLoad() {
+    for (int i = 0; i < (SIMULATION_TIME / SIMULATION_INTERVAL); i++) {
+        predicted_load[i] =  REQUESTS_MULTIPLIER * requests_per_minute[i];
+    }
 }
 
 
@@ -372,6 +377,9 @@ int main() {
 
     // Generování predikované zátěže
     GeneratePredictedLoad();
+    
+    // Generování reálné zátěže
+    GenerateRealRequestsPerMinute();
 
     // Inicializace kontejnerů
     InitContainers(MIN_CONTAINERS);
