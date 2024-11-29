@@ -22,17 +22,17 @@ using namespace std;
 /* __PARAMETRY SIMULACE_______________________________________________________________________________________________________ */
 
 /* --Obecné parametry-- */
-const int REQUESTS_MULTIPLIER = 25;            // Násobitel počtu požadavků
-
 const string SCALING_MODEL = "REACTIVE";      // <<< Choose the scaling model <<<
 //const string SCALING_MODEL = "PREDICTIVE"
 
+const int REQUESTS_MULTIPLIER = 25;            // Násobitel počtu požadavků
+const double SERVICE_TIME = 0.1;               // Základní čas zpracování jednoho požadavku (v sekundách)
+const double ALPHA = 0.02;                     // Koeficient ovlivňující nárůst latence
 const int MAX_CONTAINERS = 40;                 // MAX a MIN počet dostupných kontejnerů
 const int MIN_CONTAINERS = 1;
 const int SCALING_INTERVAL = 2;                // Interval kontroly pro škálování (v minutách)
 const double SLA_RESPONSE_TIME = 0.2;          // SLA: 95% požadavků musí být obslouženo do 200 ms
 const double COST_PER_CONTAINER = 0.1;         // Náklady na jeden kontejner za hodinu
-const double ALPHA = 0.02;                     // Koeficient ovlivňující nárůst latence
 
 /* --Parametry pro REACTIVE-- */
 const double SCALE_UP_LOAD_PERCENTAGE = 70;    // Prahová hodnota pro reaktivní škálování nahoru (průměrná zátěž v %)
@@ -50,7 +50,6 @@ const int CONTAINER_STARTUP_TIME = 15;         // Doba spuštění kontejneru v 
 /* KONSTANTY */
 const int SIMULATION_TIME = 24 * 3600;         // Simulujeme 24 hodin (v sekundách)
 const int SIMULATION_INTERVAL = 60;            // Simulujeme zátěž po minutových intervalech (v sekundách)
-const double SERVICE_TIME = 0.1;               // Základní čas zpracování jednoho požadavku (v sekundách)
 
 // Predictive - Výpočet DESIRED_LOAD - maximální průměrný počet současně se vyřizujících požadavků v jednom kontejneru
 const int DESIRED_LOAD = (DESIRED_PERCENTAGE_LOAD * (SLA_RESPONSE_TIME - SERVICE_TIME)) / (100.0 * SERVICE_TIME * ALPHA);
