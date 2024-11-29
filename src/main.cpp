@@ -19,7 +19,7 @@ const double COST_PER_CONTAINER = 0.1;     // Náklady na jeden kontejner za hod
 const double ALPHA = 0.02;                 // Koeficient ovlivňující nárůst latence
 const int SCALE_UP_LOAD = 38;              // Prahová hodnota pro reaktivní škálování nahoru (průměrná zátěž)
 const int SCALE_DOWN_LOAD = 10;            // Prahová hodnota pro reaktivní škálování dolů (průměrná zátěž)
-const double DESIRED_PERCENTAGE_LOAD = 95; // Maximální průměrná zátěž kontejneru v % pro prediktivní škálování
+const double DESIRED_PERCENTAGE_LOAD = 85; // Maximální průměrná zátěž kontejneru v % pro prediktivní škálování
 // Výpočet DESIRED_LOAD - maximální průměrný počet současně se vyřizujících požadavků v jednom kontejneru
 const int DESIRED_LOAD = ((((DESIRED_PERCENTAGE_LOAD / 100) * SLA_RESPONSE_TIME) / SERVICE_TIME) - 1) / ALPHA;
 const int CONTAINER_STARTUP_TIME = 15;     // Doba spuštění kontejneru v sekundách
