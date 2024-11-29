@@ -406,7 +406,7 @@ int main() {
     Run();
 
     // Výstup výsledků
-    response_time_stat.Output();
+    //response_time_stat.Output();
     response_time_hist.Output();
 
     double sla_percentage = 100.0 * (1 - ((double)sla_violations / total_requests));
