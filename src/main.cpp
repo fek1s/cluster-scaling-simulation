@@ -181,7 +181,16 @@ double GetInterarrivalTime() {
 
 void GenerateRealRequestsPerMinute() {
     for (int i = 0; i < (SIMULATION_TIME / SIMULATION_INTERVAL); i++) {
-        real_requests_per_minute[i] = /*zde vlož něco co to rozptýlí s normálním rozdělením a směrodatnou odchylkou 15% */ REQUESTS_MULTIPLIER * requests_per_minute[i];
+
+        // Generování reálné zátěže s normálním rozdělením
+        double mean = REQUESTS_MULTIPLIER * requests_per_minute[i];
+        // 15% odchylka od průměru
+        double deviation = 0.15 * mean;
+        // Náhodný počet požadavků s normálním rozdělením
+        double real_requests = Normal(mean, deviation);
+
+        // Zaokrouhlení na celé číslo a omezení na nezáporné hodnoty
+        real_requests_per_minute[i] = static_cast<int>(max(0.0,real_requests));
     }
     predicted_load[((SIMULATION_TIME / SIMULATION_INTERVAL) - 1)] = REQUESTS_MULTIPLIER * requests_per_minute[0]; // Poslední interval
 }
