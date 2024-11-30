@@ -26,6 +26,7 @@ const string SCALING_MODEL = "REACTIVE";      // <<< Choose the scaling model <<
 //const string SCALING_MODEL = "PREDICTIVE"
 
 const int REQUESTS_MULTIPLIER = 25;            // Násobitel počtu požadavků
+const double STANDARD_DEVIATION = 0.15;        // Standardní odchylka reálných dat zátěže oproti predikci
 const double SERVICE_TIME = 0.1;               // Základní čas zpracování jednoho požadavku (v sekundách)
 const double ALPHA = 0.02;                     // Koeficient ovlivňující nárůst latence
 const int MAX_CONTAINERS = 40;                 // MAX a MIN počet dostupných kontejnerů
@@ -225,8 +226,8 @@ void GenerateRealRequestsPerMinute() {
         // Generování reálné zátěže s normálním rozdělením
         int mean = REQUESTS_MULTIPLIER * requests_per_minute[i];
 
-        // 15% odchylka od průměrné hodnoty
-        double deviation = 0.15 * mean;
+        // odchylka od průměrné hodnoty
+        double deviation = STANDARD_DEVIATION * mean;
 
         // Vygenerování náhodného počtu požadavků
         double real_requests = Normal(mean, deviation);
