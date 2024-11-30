@@ -23,7 +23,7 @@ using namespace std;
 
 /* --Obecné parametry-- */
 const string SCALING_MODEL = "REACTIVE";      // <<< Choose the scaling model <<<
-//const string SCALING_MODEL = "PREDICTIVE"
+//const string SCALING_MODEL = "PREDICTIVE";
 
 const int REQUESTS_MULTIPLIER = 25;            // Násobitel počtu požadavků
 const double STANDARD_DEVIATION = 0.15;        // Standardní odchylka reálných dat zátěže oproti predikci
