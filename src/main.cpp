@@ -4,7 +4,7 @@
  *  Autors: Jakub Fukala - xfukal01
  *           Adam Kozubek - xkozub09
  * 
- *  Datum vytvoření: 29.11.2024
+ *  Datum vytvoření: 26.11.2024
  */
 
 #include <iostream>
