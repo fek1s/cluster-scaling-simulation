@@ -12,17 +12,8 @@ Authors:
 Date: 26.11.2024
 
 
-## Work division
-
-xfukal01 - 
-xkozub09 - 
-
 ## Team cooperation
 
 Comunication channels:         Messenger, Discord
 System for version managment:  git (running on Github)
 
-
-## Documentation
-
-![Dokumentace](dokumentace)
